@@ -6,7 +6,7 @@ import io
 st.set_page_config(layout="wide")
 
 # =====================================================
-# RAGA ENGINE (Same as before)
+# RAGA ENGINE
 # =====================================================
 
 R_OPTIONS = ["R1","R1","R1","R1","R2","R2","R2","R2","R3","R3","R3","R3"]
@@ -49,7 +49,7 @@ TALAS = {
 }
 
 # =====================================================
-# SHRUTI ENGINE (Adjustable)
+# SHRUTI MAP (Stage 2 placeholder)
 # =====================================================
 
 DEFAULT_CENT_MAP = {
@@ -63,10 +63,8 @@ DEFAULT_CENT_MAP = {
 }
 
 def swara_to_midi(base_sa, swara):
-    octave = 1 if "'" in swara else 0
-    sw = swara.replace("'", "")
-    base_note = base_sa + octave * 12
-    return base_note
+    octave_shift = 12 if "'" in swara else 0
+    return base_sa + octave_shift
 
 # =====================================================
 # SANDHAM + MELODY
@@ -87,7 +85,7 @@ def generate_melody(raga_name, total_notes):
     return melody
 
 # =====================================================
-# MIDI EXPORT
+# MIDI EXPORT (Corrected)
 # =====================================================
 
 def create_midi(melody, base_sa, tempo):
@@ -95,6 +93,7 @@ def create_midi(melody, base_sa, tempo):
     track = 0
     channel = 0
     time = 0
+
     midi.addTempo(track, time, tempo)
 
     for sw in melody:
@@ -104,13 +103,14 @@ def create_midi(melody, base_sa, tempo):
 
     buffer = io.BytesIO()
     midi.writeFile(buffer)
-    return buffer.getvalue()
+    buffer.seek(0)   # IMPORTANT FIX
+    return buffer
 
 # =====================================================
 # UI
 # =====================================================
 
-st.title("Carnatic Composer — Stage 2 (Shruti + MIDI)")
+st.title("Carnatic Composer — Stage 2 (Stable MIDI)")
 
 with st.sidebar:
     raga_choice = st.selectbox("Raga", list(RAGAS.keys()))
@@ -132,10 +132,16 @@ if st.button("Generate"):
     st.text(" ".join(melody))
 
     st.subheader("Shruti Mapping (Cents)")
-    for sw in melody[:10]:
+    for sw in melody[:8]:
         sw_clean = sw.replace("'", "")
         cents = DEFAULT_CENT_MAP.get(sw_clean, 0)
         st.write(f"{sw} → {cents} cents")
 
-    midi_data = create_midi(melody, base_sa, tempo)
-    st.download_button("Download MIDI", midi_data, "composition.mid")
+    midi_buffer = create_midi(melody, base_sa, tempo)
+
+    st.download_button(
+        label="Download MIDI",
+        data=midi_buffer,
+        file_name="composition.mid",
+        mime="audio/midi"
+    )
