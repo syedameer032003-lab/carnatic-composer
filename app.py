@@ -1,71 +1,43 @@
     
 
-import streamlit as st
+    import streamlit as st
+import json
 import random
 
 st.set_page_config(layout="wide")
 
 # =====================================================
-# MELAKARTA RAGA NAMES
+# LOAD JSON DATABASE
 # =====================================================
 
-MELAKARTA_NAMES = [
-"Kanakangi","Ratnangi","Ganamurti","Vanaspati","Manavati","Tanarupi",
-"Senavati","Hanumatodi","Dhenuka","Natakapriya","Kokilapriya","Rupavati",
-"Gayakapriya","Vakulabharanam","Mayamalavagowla","Chakravakam","Suryakantam",
-"Hatakambari","Jhankaradhwani","Natabhairavi","Keeravani","Kharaharapriya",
-"Gourimanohari","Varunapriya","Mararanjani","Charukesi","Sarasangi",
-"Harikambhoji","Dheerasankarabharanam","Naganandini","Yagapriya",
-"Ragavardhini","Gangeyabhushani","Vagadheeswari","Shulini","Chalanata",
-"Salagam","Jalarnavam","Jhalavarali","Navaneetam","Pavani","Raghupriya",
-"Gavambodhi","Bhavapriya","Subhapantuvarali","Shadvidamargini","Suvarnangi",
-"Divyamani","Dhavalambari","Namanarayani","Kamavardhini","Ramapriya",
-"Gamanashrama","Vishwambari","Shamalangi","Shanmukhapriya",
-"Simhendramadhyamam","Hemavati","Dharmavati","Neetimati","Kantamani",
-"Rishabhapriya","Latangi","Vachaspati","Mechakalyani","Chitrambari",
-"Sucharitra","Jyotiswarupini","Dhatuvardhini","Nasikabhushani","Kosalam",
-"Rasikapriya"
-]
+with open("raga_database.json", "r", encoding="utf-8") as f:
+    RAGA_DB = json.load(f)["melakarta"]
 
 # =====================================================
-# SWARA OPTIONS
+# BUILD RAGA LIST
 # =====================================================
 
-R_OPTIONS = ["R1","R1","R1","R1","R2","R2","R2","R2","R3","R3","R3","R3"]
-G_OPTIONS = ["G1","G2","G3","G1","G2","G3","G1","G2","G3","G1","G2","G3"]
-D_OPTIONS = ["D1","D1","D1","D1","D2","D2","D2","D2","D3","D3","D3","D3"]
-N_OPTIONS = ["N1","N2","N3","N1","N2","N3","N1","N2","N3","N1","N2","N3"]
-
-# =====================================================
-# RAGA ENGINE
-# =====================================================
-
-def generate_72_melakarta():
-    ragas = {}
-    count = 0
-    for m in ["M1","M2"]:
-        for i in range(36):
-            r = R_OPTIONS[i % 12]
-            g = G_OPTIONS[i % 12]
-            d = D_OPTIONS[i % 12]
-            n = N_OPTIONS[i % 12]
-
-            name = MELAKARTA_NAMES[count]
-
-            aroha = ["S", r, g, m, "P", d, n, "S'"]
-            avaroha = ["S'", n, d, "P", m, g, r, "S"]
-
-            ragas[name] = {
-                "number": count + 1,
-                "aroha": aroha,
-                "avaroha": avaroha,
-                "swara_set": list(set(aroha + avaroha)),
-                "madhyama": m
-            }
-            count += 1
+def build_raga_list():
+    ragas = []
+    for mela_num, data in RAGA_DB.items():
+        ragas.append({
+            "label": f"{data['name']} (Mela {mela_num})",
+            "mela": mela_num,
+            "type": "Melakarta",
+            "name": data["name"],
+            "data": data
+        })
+        for j_name, j_data in data["janya"].items():
+            ragas.append({
+                "label": f"{data['name']} - {j_name}",
+                "mela": mela_num,
+                "type": "Janya",
+                "name": f"{data['name']} - {j_name}",
+                "data": j_data
+            })
     return ragas
 
-RAGAS = generate_72_melakarta()
+ALL_RAGAS = build_raga_list()
 
 # =====================================================
 # TALA ENGINE
@@ -79,43 +51,65 @@ TALAS = {
 }
 
 # =====================================================
-# TRANSITION ENGINE
+# SANDHAM TEMPLATES
 # =====================================================
 
-def raga_similarity(r1, r2):
-    s1 = set(RAGAS[r1]["swara_set"])
-    s2 = set(RAGAS[r2]["swara_set"])
-    shared = len(s1.intersection(s2))
-    same_m = 2 if RAGAS[r1]["madhyama"] == RAGAS[r2]["madhyama"] else 0
-    return shared + same_m
-
-def suggest_ragas(base_raga):
-    scores = {}
-    for r in RAGAS:
-        if r != base_raga:
-            scores[r] = raga_similarity(base_raga, r)
-    sorted_ragas = sorted(scores.items(), key=lambda x: x[1], reverse=True)
-    return [r[0] for r in sorted_ragas[:3]]
-
-# =====================================================
-# SANDHAM ENGINE
-# =====================================================
+SANDHAM_TEMPLATES = [
+    [4,4,4,4],
+    [3,3,2],
+    [5,5,6],
+    [7,7]
+]
 
 BASE_CLUSTERS = ["தனதன","தத்தன","தானன","தந்தன"]
 
 def generate_sandham(cycles, aksharas):
-    total_units = cycles * aksharas
-    pattern = random.choices(BASE_CLUSTERS, k=total_units)
+    total = cycles * aksharas
+    pattern = random.choices(BASE_CLUSTERS, k=total)
     pattern[-1] = "தனதான"
-    return " ".join(pattern)
+    return pattern
 
 # =====================================================
-# MELODY ENGINE
+# MELODY ENGINE (Scale Driven for Now)
 # =====================================================
 
-def generate_melody(raga_name, total_notes):
-    swaras = RAGAS[raga_name]["swara_set"]
-    melody = [random.choice(swaras) for _ in range(total_notes)]
+def generate_melody(raga_data, total_notes, mood):
+
+    scale = raga_data["aroha"]
+    if scale[-1] == "S'":
+        scale = scale[:-1]
+
+    melody = []
+    current_index = 0
+
+    for i in range(total_notes):
+
+        progress = i / total_notes
+        direction = 1 if progress < 0.5 else -1
+
+        if mood == "Devotional":
+            leap_prob = 0.05
+        elif mood == "Romantic":
+            leap_prob = 0.15
+        elif mood == "Heroic":
+            leap_prob = 0.25
+        else:
+            leap_prob = 0.1
+
+        r = random.random()
+
+        if r < 0.7:
+            new_index = current_index + direction
+        elif r < 0.9:
+            new_index = current_index
+        else:
+            new_index = current_index + random.choice([-2,2])
+
+        new_index = max(0, min(len(scale)-1, new_index))
+
+        melody.append(scale[new_index])
+        current_index = new_index
+
     melody[-1] = "S"
     return melody
 
@@ -123,71 +117,57 @@ def generate_melody(raga_name, total_notes):
 # UI
 # =====================================================
 
-st.title("Carnatic Structured Composer")
+st.title("Carnatic Composer — JSON Master Engine")
 
 with st.sidebar:
     tala_choice = st.selectbox("Tala", list(TALAS.keys()))
-    num_sections = st.slider("Number of Sections", 1, 5, 3)
+    mood = st.selectbox("Mood", ["Devotional","Romantic","Heroic","Melancholic"])
+    chakra_filter = st.selectbox("Chakra Filter", ["All"] + list(range(1,13)))
+    search = st.text_input("Search Raga")
 
-st.subheader("Section Configuration")
+# FILTERING
+filtered_ragas = []
 
-sections = []
-first_raga = st.selectbox("First Section Raga", list(RAGAS.keys()))
+for r in ALL_RAGAS:
 
-for i in range(num_sections):
-    st.markdown(f"### Section {i+1}")
-    name = st.text_input(f"Section Name {i+1}", f"Section_{i+1}")
-    cycles = st.slider(f"Cycles (Section {i+1})", 1, 4, 2, key=f"cycles{i}")
+    mela_data = RAGA_DB[str(r["mela"])]
 
-    if i == 0:
-        raga = first_raga
-        auto_raga = False
-        st.write(f"Raga: {raga} (Fixed)")
-    else:
-        auto_raga = st.checkbox(f"Auto Raga Suggest (Section {i+1})", True, key=f"auto{i}")
-        if auto_raga:
-            raga = None
-            st.write("Will auto-select based on previous section")
-        else:
-            raga = st.selectbox(f"Manual Raga (Section {i+1})", list(RAGAS.keys()), key=f"manual{i}")
+    if chakra_filter != "All" and mela_data["chakra"] != chakra_filter:
+        continue
 
-    sections.append({
-        "name": name,
-        "raga": raga,
-        "cycles": cycles,
-        "auto_raga": auto_raga
-    })
+    if search.lower() not in r["label"].lower():
+        continue
 
-if st.button("Generate Full Song"):
+    filtered_ragas.append(r)
 
-    prev_raga = first_raga
+raga_labels = [r["label"] for r in filtered_ragas]
+
+selected_label = st.selectbox("Select Raga", raga_labels)
+
+selected_raga = next(r for r in filtered_ragas if r["label"] == selected_label)
+
+cycles = st.slider("Cycles", 1, 4, 2)
+
+if st.button("Generate Composition"):
+
     aksharas = TALAS[tala_choice]
+    sandham_pattern = generate_sandham(cycles, aksharas)
+    melody = generate_melody(selected_raga["data"], cycles*aksharas, mood)
 
-    for idx, sec in enumerate(sections):
+    st.subheader("Raga Info")
+    st.write(f"Name: {selected_raga['label']}")
+    st.write(f"Type: {selected_raga['type']}")
+    st.write(f"Mela: {selected_raga['mela']}")
+    st.write(f"Chakra: {RAGA_DB[str(selected_raga['mela'])]['chakra']}")
 
-        if idx != 0 and sec["auto_raga"]:
-            suggestions = suggest_ragas(prev_raga)
-            sec_raga = suggestions[0]
-        else:
-            sec_raga = sec["raga"]
+    st.subheader("Sandham")
+    st.text(" ".join(sandham_pattern))
 
-        sandham = generate_sandham(sec["cycles"], aksharas)
-        melody = generate_melody(sec_raga, sec["cycles"] * aksharas)
+    st.subheader("Melody")
+    st.text(" ".join(melody))
 
-        st.markdown(f"## {sec['name']}")
-        st.write(f"Raga: {sec_raga} (Melakarta {RAGAS[sec_raga]['number']})")
-        st.write("Tala:", tala_choice)
+    st.subheader("Aroha")
+    st.text(" ".join(selected_raga["data"]["aroha"]))
 
-        st.subheader("Sandham")
-        st.text(sandham)
-
-        st.subheader("Swara Output")
-        st.text(" ".join(melody))
-
-        st.subheader("Aroha")
-        st.text(" ".join(RAGAS[sec_raga]["aroha"]))
-
-        st.subheader("Avaroha")
-        st.text(" ".join(RAGAS[sec_raga]["avaroha"]))
-
-        prev_raga = sec_raga
+    st.subheader("Avaroha")
+    st.text(" ".join(selected_raga["data"]["avaroha"]))
