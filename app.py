@@ -1,103 +1,88 @@
-from composer_engine import compose_song
+
+import streamlit as st
 import json
+from composer_engine import compose_song
 
 # ======================================
-# LOAD RAGA NAMES
+# PAGE CONFIG
 # ======================================
 
-with open("raga_database.json", "r", encoding="utf-8") as f:
-    raw_data = json.load(f)
+st.set_page_config(page_title="Carnatic Composition Engine", layout="wide")
 
-RAGA_NAMES = [
-    data["name"]
-    for _, data in raw_data["melakarta"].items()
-]
+st.title("🎼 Carnatic Commercial Composition Engine")
 
 # ======================================
-# SIMPLE CLI INTERFACE
+# LOAD RAGA DATABASE
 # ======================================
 
-def main():
+@st.cache_data
+def load_ragas():
+    with open("raga_database.json", "r", encoding="utf-8") as f:
+        raw = json.load(f)
 
-    print("\n🎼 Carnatic Composition Engine\n")
+    ragas = []
+    for _, data in raw["melakarta"].items():
+        ragas.append(data["name"])
 
-    print("Available Ragas:")
-    for i, raga in enumerate(RAGA_NAMES, start=1):
-        print(f"{i}. {raga}")
+    return sorted(ragas)
 
-    raga_choice = int(input("\nSelect Raga Number: "))
-    raga_name = RAGA_NAMES[raga_choice - 1]
+RAGA_NAMES = load_ragas()
 
-    print("\nAvailable Talas:")
-    print("1. Adi")
-    print("2. Rupaka")
-    print("3. Misra_Chapu")
-    print("4. Khanda_Chapu")
+# ======================================
+# UI CONTROLS
+# ======================================
 
-    tala_map = {
-        1: "Adi",
-        2: "Rupaka",
-        3: "Misra_Chapu",
-        4: "Khanda_Chapu"
-    }
+col1, col2 = st.columns(2)
 
-    tala_choice = int(input("\nSelect Tala Number: "))
-    tala_name = tala_map[tala_choice]
+with col1:
+    raga_name = st.selectbox("Select Raga", RAGA_NAMES)
 
-    print("\nMotion Types:")
-    print("1. gradual_rise")
-    print("2. fall_then_rise")
-    print("3. explosive")
-    print("4. wave")
-    print("5. fall")
-    print("6. static")
+    tala_name = st.selectbox(
+        "Select Tala",
+        ["Adi", "Rupaka", "Misra_Chapu", "Khanda_Chapu"]
+    )
 
-    motion_map = {
-        1: "gradual_rise",
-        2: "fall_then_rise",
-        3: "explosive",
-        4: "wave",
-        5: "fall",
-        6: "static"
-    }
+    motion = st.selectbox(
+        "Select Emotional Motion",
+        ["gradual_rise", "fall_then_rise", "explosive",
+         "wave", "fall", "static"]
+    )
 
-    motion_choice = int(input("\nSelect Motion Number: "))
-    motion = motion_map[motion_choice]
+with col2:
+    intensity = st.slider("Intensity", 1, 10, 6)
 
-    intensity = int(input("\nEnter Intensity (1-10): "))
+    line_bias = st.selectbox(
+        "Line Bias",
+        ["adaptive", "even", "odd"]
+    )
 
-    print("\nLine Bias:")
-    print("1. even")
-    print("2. odd")
-    print("3. adaptive")
+    spill_probability = st.slider(
+        "Spill Probability",
+        0.0, 0.5, 0.1
+    )
 
-    bias_map = {
-        1: "even",
-        2: "odd",
-        3: "adaptive"
-    }
+# ======================================
+# GENERATE BUTTON
+# ======================================
 
-    bias_choice = int(input("\nSelect Bias Number: "))
-    line_bias = bias_map[bias_choice]
+if st.button("Generate Composition"):
 
-    # Compose
     song = compose_song(
         polarity="positive",
         motion=motion,
         intensity=intensity,
         raga_name=raga_name,
         tala_name=tala_name,
-        line_bias=line_bias
+        line_bias=line_bias,
+        spill_probability=spill_probability
     )
 
-    print("\n🎵 PALLAVI:\n")
+    st.subheader("🎵 Pallavi")
+
     for line in song["pallavi"]:
-        print(line)
+        st.write(line)
 
-    print("\n🎵 CHARANAM:\n")
+    st.subheader("🎵 Charanam")
+
     for line in song["charanam"]:
-        print(line)
-
-
-if __name__ == "__main__":
-    main()
+        st.write(line)
