@@ -1,0 +1,2 @@
+DEFAULT_SIGNATURE = "classical_heavy"
+DEFAULT_ENTROPY = 0.3
