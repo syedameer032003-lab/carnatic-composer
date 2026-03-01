@@ -1,171 +1,237 @@
 import streamlit as st
-import json
 import random
+import json
 
-st.set_page_config(layout="wide")
-
-# =====================================================
-# LOAD JSON DATABASE
-# =====================================================
+# ===============================
+# LOAD RAGA DATABASE (JSON FILE)
+# ===============================
 
 with open("raga_database.json", "r", encoding="utf-8") as f:
-    RAGA_DB = json.load(f)["melakarta"]
+    RAGA_DB = json.load(f)
 
-# =====================================================
-# BUILD RAGA LIST
-# =====================================================
+# ===============================
+# TALA DATABASE
+# ===============================
 
-def build_raga_list():
-    ragas = []
-    for mela_num, data in RAGA_DB.items():
-        ragas.append({
-            "label": f"{data['name']} (Mela {mela_num})",
-            "mela": mela_num,
-            "type": "Melakarta",
-            "name": data["name"],
-            "data": data
-        })
-        for j_name, j_data in data["janya"].items():
-            ragas.append({
-                "label": f"{data['name']} - {j_name}",
-                "mela": mela_num,
-                "type": "Janya",
-                "name": f"{data['name']} - {j_name}",
-                "data": j_data
-            })
-    return ragas
-
-ALL_RAGAS = build_raga_list()
-
-# =====================================================
-# TALA ENGINE
-# =====================================================
-
-TALAS = {
+TALA_DB = {
     "Adi": 8,
     "Rupaka": 6,
-    "Misra Chapu": 7,
-    "Khanda Chapu": 5
+    "Misra_Chapu": 7,
+    "Khanda_Chapu": 5
 }
 
-# =====================================================
-# SANDHAM TEMPLATES
-# =====================================================
+# ===============================
+# ATOMIC SANDHAM CLUSTERS
+# ===============================
 
-SANDHAM_TEMPLATES = [
-    [4,4,4,4],
-    [3,3,2],
-    [5,5,6],
-    [7,7]
-]
+CLUSTERS = {
+    2: ["தன", "தத்"],
+    3: ["தனன", "தத்த"],
+    4: ["தனதன", "தத்தன", "தானா"],
+    5: ["தனதத்த", "தத்ததன"],
+    6: ["தனதனன", "தத்ததத்த"]
+}
 
-BASE_CLUSTERS = ["தனதன","தத்தன","தானன","தந்தன"]
+# ===============================
+# RAGA PROFILE ENGINE
+# ===============================
 
-def generate_sandham(cycles, aksharas):
-    total = cycles * aksharas
-    pattern = random.choices(BASE_CLUSTERS, k=total)
-    pattern[-1] = "தனதான"
+def raga_profile(raga):
+
+    brightness = 0
+    tension = 0
+    complexity = 0
+
+    aroha = raga.get("aroha", [])
+    janya = raga.get("janya", [])
+
+    for swara in aroha:
+
+        if "M2" in swara:
+            brightness += 2
+        if "N3" in swara:
+            brightness += 1
+
+        if "R1" in swara or "D1" in swara:
+            tension += 2
+        if "R3" in swara:
+            tension += 1
+
+    # Vakra adds rhythmic complexity
+    if isinstance(janya, list):
+        if any("Vakra" in j for j in janya):
+            complexity += 2
+    elif "Vakra" in str(janya):
+        complexity += 2
+
+    if brightness > tension:
+        tonal_bias = "bright"
+    elif tension > brightness:
+        tonal_bias = "heavy"
+    else:
+        tonal_bias = "balanced"
+
+    return {
+        "tonal_bias": tonal_bias,
+        "complexity": complexity
+    }
+
+# ===============================
+# STRUCTURE DECISION
+# ===============================
+
+def decide_structure(motion):
+
+    if motion == "explosive":
+        return 2, 4
+    if motion == "fall_then_rise":
+        return 4, 8
+    if motion == "wave":
+        return 4, 6
+    if motion == "fall":
+        return 3, 4
+
+    return 3, 6
+
+def emotional_curve(motion, profile):
+
+    if motion == "gradual_rise":
+        base = ["base", "lift", "peak"]
+    elif motion == "fall_then_rise":
+        base = ["heavy", "relax", "lift", "peak"]
+    elif motion == "wave":
+        base = ["base", "lift", "relax", "lift", "peak"]
+    elif motion == "fall":
+        base = ["heavy", "drop"]
+    else:
+        base = ["base", "lift", "peak"]
+
+    if profile["tonal_bias"] == "bright":
+        base.append("peak")
+
+    if profile["tonal_bias"] == "heavy":
+        base.insert(0, "heavy")
+
+    return base
+
+# ===============================
+# RHYTHM ENGINE
+# ===============================
+
+def dynamic_division(total_beats, segments):
+
+    parts = []
+    remaining = total_beats
+
+    for i in range(segments - 1):
+        min_left = 2 * (segments - i - 1)
+        val = random.randint(2, remaining - min_left)
+        parts.append(val)
+        remaining -= val
+
+    parts.append(remaining)
+    return parts
+
+def apply_raga_density(pattern, profile):
+
+    if profile["tonal_bias"] == "bright":
+        pattern[-1] += 1
+
+    if profile["tonal_bias"] == "heavy":
+        pattern[0] += 1
+
+    if profile["complexity"] > 1 and len(pattern) > 2:
+        pattern.insert(1, 2)
+
     return pattern
 
-# =====================================================
-# MELODY ENGINE (Scale Driven for Now)
-# =====================================================
+def build_sandham(pattern):
 
-def generate_melody(raga_data, total_notes, mood):
+    words = []
 
-    scale = raga_data["aroha"]
-    if scale[-1] == "S'":
-        scale = scale[:-1]
-
-    melody = []
-    current_index = 0
-
-    for i in range(total_notes):
-
-        progress = i / total_notes
-        direction = 1 if progress < 0.5 else -1
-
-        if mood == "Devotional":
-            leap_prob = 0.05
-        elif mood == "Romantic":
-            leap_prob = 0.15
-        elif mood == "Heroic":
-            leap_prob = 0.25
+    for weight in pattern:
+        if weight in CLUSTERS:
+            words.append(random.choice(CLUSTERS[weight]))
         else:
-            leap_prob = 0.1
+            nearest = min(CLUSTERS.keys(), key=lambda x: abs(x - weight))
+            words.append(random.choice(CLUSTERS[nearest]))
 
-        r = random.random()
+    return " ".join(words)
 
-        if r < 0.7:
-            new_index = current_index + direction
-        elif r < 0.9:
-            new_index = current_index
-        else:
-            new_index = current_index + random.choice([-2,2])
+def generate_section(lines, beats, motion, intensity, profile):
 
-        new_index = max(0, min(len(scale)-1, new_index))
+    curve = emotional_curve(motion, profile)
+    result = []
 
-        melody.append(scale[new_index])
-        current_index = new_index
+    for i in range(lines):
 
-    melody[-1] = "S"
-    return melody
+        stage = curve[min(i, len(curve)-1)]
+        segments = 3 if stage in ["base", "lift"] else 2
 
-# =====================================================
-# UI
-# =====================================================
+        pattern = dynamic_division(beats, segments)
 
-st.title("Carnatic Composer — JSON Master Engine")
+        if stage == "lift":
+            pattern[-1] += 1
 
-with st.sidebar:
-    tala_choice = st.selectbox("Tala", list(TALAS.keys()))
-    mood = st.selectbox("Mood", ["Devotional","Romantic","Heroic","Melancholic"])
-    chakra_filter = st.selectbox("Chakra Filter", ["All"] + list(range(1,13)))
-    search = st.text_input("Search Raga")
+        if stage == "peak":
+            pattern[-1] += min(2, intensity // 3)
 
-# FILTERING
-filtered_ragas = []
+        if stage == "heavy":
+            pattern[0] += 1
 
-for r in ALL_RAGAS:
+        pattern = apply_raga_density(pattern, profile)
 
-    mela_data = RAGA_DB[str(r["mela"])]
+        result.append(build_sandham(pattern))
 
-    if chakra_filter != "All" and mela_data["chakra"] != chakra_filter:
-        continue
+    return result
 
-    if search.lower() not in r["label"].lower():
-        continue
+# ===============================
+# STREAMLIT UI
+# ===============================
 
-    filtered_ragas.append(r)
+st.title("🎼 Carnatic Composition Engine")
 
-raga_labels = [r["label"] for r in filtered_ragas]
+raga_names = [r["name"] for r in RAGA_DB]
+selected_raga_name = st.selectbox("Select Raga", raga_names)
 
-selected_label = st.selectbox("Select Raga", raga_labels)
+selected_raga = next(r for r in RAGA_DB if r["name"] == selected_raga_name)
 
-selected_raga = next(r for r in filtered_ragas if r["label"] == selected_label)
+tala_name = st.selectbox("Select Tala", list(TALA_DB.keys()))
 
-cycles = st.slider("Cycles", 1, 4, 2)
+motion = st.selectbox(
+    "Emotional Motion",
+    ["gradual_rise", "fall_then_rise", "wave", "explosive", "fall", "static"]
+)
 
-if st.button("Generate Composition"):
+intensity = st.slider("Intensity", 1, 10, 5)
 
-    aksharas = TALAS[tala_choice]
-    sandham_pattern = generate_sandham(cycles, aksharas)
-    melody = generate_melody(selected_raga["data"], cycles*aksharas, mood)
+if st.button("Compose"):
 
-    st.subheader("Raga Info")
-    st.write(f"Name: {selected_raga['label']}")
-    st.write(f"Type: {selected_raga['type']}")
-    st.write(f"Mela: {selected_raga['mela']}")
-    st.write(f"Chakra: {RAGA_DB[str(selected_raga['mela'])]['chakra']}")
+    profile = raga_profile(selected_raga)
+    beats = TALA_DB[tala_name]
 
-    st.subheader("Sandham")
-    st.text(" ".join(sandham_pattern))
+    pallavi_lines, charanam_lines = decide_structure(motion)
 
-    st.subheader("Melody")
-    st.text(" ".join(melody))
+    pallavi = generate_section(
+        pallavi_lines,
+        beats,
+        motion,
+        intensity,
+        profile
+    )
 
-    st.subheader("Aroha")
-    st.text(" ".join(selected_raga["data"]["aroha"]))
+    charanam = generate_section(
+        charanam_lines,
+        beats,
+        motion,
+        intensity,
+        profile
+    )
 
-    st.subheader("Avaroha")
-    st.text(" ".join(selected_raga["data"]["avaroha"]))
+    st.subheader("🎵 Pallavi")
+    for line in pallavi:
+        st.write(line)
+
+    st.subheader("🎵 Charanam")
+    for line in charanam:
+        st.write(line)
