@@ -1,11 +1,12 @@
 import streamlit as st
 import random
-import numpy as np
+from midiutil import MIDIFile
+import io
 
 st.set_page_config(layout="wide")
 
 # =====================================================
-# RAGA ENGINE
+# RAGA ENGINE (Same as before)
 # =====================================================
 
 R_OPTIONS = ["R1","R1","R1","R1","R2","R2","R2","R2","R3","R3","R3","R3"]
@@ -47,34 +48,28 @@ TALAS = {
     "Khanda Chapu": 5
 }
 
-NADAI = {
-    "Chatusra": 4,
-    "Tisra": 3,
-    "Khanda": 5,
-    "Misra": 7
+# =====================================================
+# SHRUTI ENGINE (Adjustable)
+# =====================================================
+
+DEFAULT_CENT_MAP = {
+    "S": 0,
+    "R1": 90, "R2": 204, "R3": 294,
+    "G1": 204, "G2": 294, "G3": 408,
+    "M1": 498, "M2": 590,
+    "P": 702,
+    "D1": 792, "D2": 906, "D3": 996,
+    "N1": 906, "N2": 996, "N3": 1110
 }
 
-# =====================================================
-# TRANSITION ENGINE
-# =====================================================
-
-def raga_similarity(r1, r2):
-    s1 = set(RAGAS[r1]["swara_set"])
-    s2 = set(RAGAS[r2]["swara_set"])
-    shared = len(s1.intersection(s2))
-    same_m = 2 if RAGAS[r1]["madhyama"] == RAGAS[r2]["madhyama"] else 0
-    return shared + same_m
-
-def suggest_ragas(base_raga):
-    scores = {}
-    for r in RAGAS:
-        if r != base_raga:
-            scores[r] = raga_similarity(base_raga, r)
-    sorted_ragas = sorted(scores.items(), key=lambda x: x[1], reverse=True)
-    return [r[0] for r in sorted_ragas[:3]]
+def swara_to_midi(base_sa, swara):
+    octave = 1 if "'" in swara else 0
+    sw = swara.replace("'", "")
+    base_note = base_sa + octave * 12
+    return base_note
 
 # =====================================================
-# SANDHAM ENGINE
+# SANDHAM + MELODY
 # =====================================================
 
 BASE_CLUSTERS = ["தனதன","தத்தன","தானன","தந்தன"]
@@ -82,116 +77,65 @@ BASE_CLUSTERS = ["தனதன","தத்தன","தானன","தந்த�
 def generate_sandham(cycles, aksharas):
     total_units = cycles * aksharas
     pattern = random.choices(BASE_CLUSTERS, k=total_units)
-    pattern[-1] = "தனதான"  # cadence
+    pattern[-1] = "தனதான"
     return " ".join(pattern)
 
-# =====================================================
-# MELODY ENGINE
-# =====================================================
-
-def generate_melody(raga_name, total_notes, register="Middle"):
+def generate_melody(raga_name, total_notes):
     swaras = RAGAS[raga_name]["swara_set"]
-    melody = []
-    prev = "S"
-
-    for i in range(total_notes):
-        note = random.choice(swaras)
-        melody.append(note)
-
-    # Force cadence to S
+    melody = [random.choice(swaras) for _ in range(total_notes)]
     melody[-1] = "S"
     return melody
 
 # =====================================================
-# COMPOSER
+# MIDI EXPORT
 # =====================================================
 
-def compose_song(config):
-    sections_output = []
+def create_midi(melody, base_sa, tempo):
+    midi = MIDIFile(1)
+    track = 0
+    channel = 0
+    time = 0
+    midi.addTempo(track, time, tempo)
 
-    prev_raga = config["sections"][0]["raga"]
+    for sw in melody:
+        note = swara_to_midi(base_sa, sw)
+        midi.addNote(track, channel, note, time, 1, 100)
+        time += 1
 
-    for idx, sec in enumerate(config["sections"]):
-
-        if idx != 0 and sec["auto_raga"]:
-            suggestions = suggest_ragas(prev_raga)
-            sec_raga = suggestions[0]
-        else:
-            sec_raga = sec["raga"]
-
-        aksharas = TALAS[config["tala"]]
-        sandham = generate_sandham(sec["cycles"], aksharas)
-        melody = generate_melody(sec_raga, sec["cycles"] * aksharas)
-
-        sections_output.append({
-            "name": sec["name"],
-            "raga": sec_raga,
-            "sandham": sandham,
-            "melody": melody
-        })
-
-        prev_raga = sec_raga
-
-    return sections_output
+    buffer = io.BytesIO()
+    midi.writeFile(buffer)
+    return buffer.getvalue()
 
 # =====================================================
 # UI
 # =====================================================
 
-st.title("Carnatic Composer — Stage 1 Core")
+st.title("Carnatic Composer — Stage 2 (Shruti + MIDI)")
 
 with st.sidebar:
+    raga_choice = st.selectbox("Raga", list(RAGAS.keys()))
     tala_choice = st.selectbox("Tala", list(TALAS.keys()))
-    nadai_choice = st.selectbox("Nadai", list(NADAI.keys()))
-    tempo = st.slider("Tempo (BPM)", 60, 160, 90)
-    mood = st.selectbox("Mood", ["Devotional","Romantic","Heroic","Melancholic"])
-    num_sections = st.slider("Number of Sections", 1, 5, 3)
+    cycles = st.slider("Cycles", 1, 4, 2)
+    tempo = st.slider("Tempo", 60, 160, 90)
+    base_sa = st.slider("Base Sa (MIDI)", 48, 72, 60)
 
-st.subheader("Section Configuration")
+if st.button("Generate"):
 
-sections = []
-first_raga = st.selectbox("First Section Raga", list(RAGAS.keys()))
+    aksharas = TALAS[tala_choice]
+    sandham = generate_sandham(cycles, aksharas)
+    melody = generate_melody(raga_choice, cycles * aksharas)
 
-for i in range(num_sections):
-    st.markdown(f"### Section {i+1}")
-    name = st.text_input(f"Section Name {i+1}", f"Section_{i+1}")
-    cycles = st.slider(f"Cycles (Section {i+1})", 1, 4, 2, key=f"cycles{i}")
+    st.subheader("Sandham")
+    st.text(sandham)
 
-    if i == 0:
-        raga = first_raga
-        auto_raga = False
-        st.write(f"Raga: {raga} (Fixed)")
-    else:
-        auto_raga = st.checkbox(f"Auto Raga Suggest (Section {i+1})", True, key=f"auto{i}")
-        if auto_raga:
-            raga = first_raga
-            st.write("Will auto-select based on previous section")
-        else:
-            raga = st.selectbox(f"Manual Raga (Section {i+1})", list(RAGAS.keys()), key=f"manual{i}")
+    st.subheader("Swara")
+    st.text(" ".join(melody))
 
-    sections.append({
-        "name": name,
-        "raga": raga,
-        "cycles": cycles,
-        "auto_raga": auto_raga
-    })
+    st.subheader("Shruti Mapping (Cents)")
+    for sw in melody[:10]:
+        sw_clean = sw.replace("'", "")
+        cents = DEFAULT_CENT_MAP.get(sw_clean, 0)
+        st.write(f"{sw} → {cents} cents")
 
-if st.button("Generate Full Song"):
-
-    config = {
-        "tala": tala_choice,
-        "nadai": nadai_choice,
-        "tempo": tempo,
-        "mood": mood,
-        "sections": sections
-    }
-
-    result = compose_song(config)
-
-    for sec in result:
-        st.markdown(f"## {sec['name']}")
-        st.write("Raga:", sec["raga"])
-        st.subheader("Sandham")
-        st.text(sec["sandham"])
-        st.subheader("Swara Output")
-        st.text(" ".join(sec["melody"]))
+    midi_data = create_midi(melody, base_sa, tempo)
+    st.download_button("Download MIDI", midi_data, "composition.mid")
