@@ -117,7 +117,8 @@ def compose_song(raga, mood, emotion, entropy):
 st.title("Carnatic Emotion-Based Sandham Composer")
 
 raga_name = st.selectbox("Select Raga", get_raga_names())
-mood = st.selectbox("Select Mood", MOOD_DB["moods"])
+mood_category = st.selectbox("Select Mood Category", list(MOOD_DB["moods"].keys()))
+mood = st.selectbox("Select Specific Mood", MOOD_DB["moods"][mood_category])
 emotion = st.selectbox("Select Emotion", EMOTION_DB["emotions"])
 
 entropy = st.slider("Creativity (Entropy)", 0.0, 1.0, 0.5)
