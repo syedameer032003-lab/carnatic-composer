@@ -1,237 +1,103 @@
-import streamlit as st
-import random
+from composer_engine import compose_song
 import json
 
-# ===============================
-# LOAD RAGA DATABASE (JSON FILE)
-# ===============================
+# ======================================
+# LOAD RAGA NAMES
+# ======================================
 
 with open("raga_database.json", "r", encoding="utf-8") as f:
-    RAGA_DB = json.load(f)
+    raw_data = json.load(f)
 
-# ===============================
-# TALA DATABASE
-# ===============================
+RAGA_NAMES = [
+    data["name"]
+    for _, data in raw_data["melakarta"].items()
+]
 
-TALA_DB = {
-    "Adi": 8,
-    "Rupaka": 6,
-    "Misra_Chapu": 7,
-    "Khanda_Chapu": 5
-}
+# ======================================
+# SIMPLE CLI INTERFACE
+# ======================================
 
-# ===============================
-# ATOMIC SANDHAM CLUSTERS
-# ===============================
+def main():
 
-CLUSTERS = {
-    2: ["தன", "தத்"],
-    3: ["தனன", "தத்த"],
-    4: ["தனதன", "தத்தன", "தானா"],
-    5: ["தனதத்த", "தத்ததன"],
-    6: ["தனதனன", "தத்ததத்த"]
-}
+    print("\n🎼 Carnatic Composition Engine\n")
 
-# ===============================
-# RAGA PROFILE ENGINE
-# ===============================
+    print("Available Ragas:")
+    for i, raga in enumerate(RAGA_NAMES, start=1):
+        print(f"{i}. {raga}")
 
-def raga_profile(raga):
+    raga_choice = int(input("\nSelect Raga Number: "))
+    raga_name = RAGA_NAMES[raga_choice - 1]
 
-    brightness = 0
-    tension = 0
-    complexity = 0
+    print("\nAvailable Talas:")
+    print("1. Adi")
+    print("2. Rupaka")
+    print("3. Misra_Chapu")
+    print("4. Khanda_Chapu")
 
-    aroha = raga.get("aroha", [])
-    janya = raga.get("janya", [])
-
-    for swara in aroha:
-
-        if "M2" in swara:
-            brightness += 2
-        if "N3" in swara:
-            brightness += 1
-
-        if "R1" in swara or "D1" in swara:
-            tension += 2
-        if "R3" in swara:
-            tension += 1
-
-    # Vakra adds rhythmic complexity
-    if isinstance(janya, list):
-        if any("Vakra" in j for j in janya):
-            complexity += 2
-    elif "Vakra" in str(janya):
-        complexity += 2
-
-    if brightness > tension:
-        tonal_bias = "bright"
-    elif tension > brightness:
-        tonal_bias = "heavy"
-    else:
-        tonal_bias = "balanced"
-
-    return {
-        "tonal_bias": tonal_bias,
-        "complexity": complexity
+    tala_map = {
+        1: "Adi",
+        2: "Rupaka",
+        3: "Misra_Chapu",
+        4: "Khanda_Chapu"
     }
 
-# ===============================
-# STRUCTURE DECISION
-# ===============================
+    tala_choice = int(input("\nSelect Tala Number: "))
+    tala_name = tala_map[tala_choice]
 
-def decide_structure(motion):
+    print("\nMotion Types:")
+    print("1. gradual_rise")
+    print("2. fall_then_rise")
+    print("3. explosive")
+    print("4. wave")
+    print("5. fall")
+    print("6. static")
 
-    if motion == "explosive":
-        return 2, 4
-    if motion == "fall_then_rise":
-        return 4, 8
-    if motion == "wave":
-        return 4, 6
-    if motion == "fall":
-        return 3, 4
+    motion_map = {
+        1: "gradual_rise",
+        2: "fall_then_rise",
+        3: "explosive",
+        4: "wave",
+        5: "fall",
+        6: "static"
+    }
 
-    return 3, 6
+    motion_choice = int(input("\nSelect Motion Number: "))
+    motion = motion_map[motion_choice]
 
-def emotional_curve(motion, profile):
+    intensity = int(input("\nEnter Intensity (1-10): "))
 
-    if motion == "gradual_rise":
-        base = ["base", "lift", "peak"]
-    elif motion == "fall_then_rise":
-        base = ["heavy", "relax", "lift", "peak"]
-    elif motion == "wave":
-        base = ["base", "lift", "relax", "lift", "peak"]
-    elif motion == "fall":
-        base = ["heavy", "drop"]
-    else:
-        base = ["base", "lift", "peak"]
+    print("\nLine Bias:")
+    print("1. even")
+    print("2. odd")
+    print("3. adaptive")
 
-    if profile["tonal_bias"] == "bright":
-        base.append("peak")
+    bias_map = {
+        1: "even",
+        2: "odd",
+        3: "adaptive"
+    }
 
-    if profile["tonal_bias"] == "heavy":
-        base.insert(0, "heavy")
+    bias_choice = int(input("\nSelect Bias Number: "))
+    line_bias = bias_map[bias_choice]
 
-    return base
-
-# ===============================
-# RHYTHM ENGINE
-# ===============================
-
-def dynamic_division(total_beats, segments):
-
-    parts = []
-    remaining = total_beats
-
-    for i in range(segments - 1):
-        min_left = 2 * (segments - i - 1)
-        val = random.randint(2, remaining - min_left)
-        parts.append(val)
-        remaining -= val
-
-    parts.append(remaining)
-    return parts
-
-def apply_raga_density(pattern, profile):
-
-    if profile["tonal_bias"] == "bright":
-        pattern[-1] += 1
-
-    if profile["tonal_bias"] == "heavy":
-        pattern[0] += 1
-
-    if profile["complexity"] > 1 and len(pattern) > 2:
-        pattern.insert(1, 2)
-
-    return pattern
-
-def build_sandham(pattern):
-
-    words = []
-
-    for weight in pattern:
-        if weight in CLUSTERS:
-            words.append(random.choice(CLUSTERS[weight]))
-        else:
-            nearest = min(CLUSTERS.keys(), key=lambda x: abs(x - weight))
-            words.append(random.choice(CLUSTERS[nearest]))
-
-    return " ".join(words)
-
-def generate_section(lines, beats, motion, intensity, profile):
-
-    curve = emotional_curve(motion, profile)
-    result = []
-
-    for i in range(lines):
-
-        stage = curve[min(i, len(curve)-1)]
-        segments = 3 if stage in ["base", "lift"] else 2
-
-        pattern = dynamic_division(beats, segments)
-
-        if stage == "lift":
-            pattern[-1] += 1
-
-        if stage == "peak":
-            pattern[-1] += min(2, intensity // 3)
-
-        if stage == "heavy":
-            pattern[0] += 1
-
-        pattern = apply_raga_density(pattern, profile)
-
-        result.append(build_sandham(pattern))
-
-    return result
-
-# ===============================
-# STREAMLIT UI
-# ===============================
-
-st.title("🎼 Carnatic Composition Engine")
-
-raga_names = [r["name"] for r in RAGA_DB]
-selected_raga_name = st.selectbox("Select Raga", raga_names)
-
-selected_raga = next(r for r in RAGA_DB if r["name"] == selected_raga_name)
-
-tala_name = st.selectbox("Select Tala", list(TALA_DB.keys()))
-
-motion = st.selectbox(
-    "Emotional Motion",
-    ["gradual_rise", "fall_then_rise", "wave", "explosive", "fall", "static"]
-)
-
-intensity = st.slider("Intensity", 1, 10, 5)
-
-if st.button("Compose"):
-
-    profile = raga_profile(selected_raga)
-    beats = TALA_DB[tala_name]
-
-    pallavi_lines, charanam_lines = decide_structure(motion)
-
-    pallavi = generate_section(
-        pallavi_lines,
-        beats,
-        motion,
-        intensity,
-        profile
+    # Compose
+    song = compose_song(
+        polarity="positive",
+        motion=motion,
+        intensity=intensity,
+        raga_name=raga_name,
+        tala_name=tala_name,
+        line_bias=line_bias
     )
 
-    charanam = generate_section(
-        charanam_lines,
-        beats,
-        motion,
-        intensity,
-        profile
-    )
+    print("\n🎵 PALLAVI:\n")
+    for line in song["pallavi"]:
+        print(line)
 
-    st.subheader("🎵 Pallavi")
-    for line in pallavi:
-        st.write(line)
+    print("\n🎵 CHARANAM:\n")
+    for line in song["charanam"]:
+        print(line)
 
-    st.subheader("🎵 Charanam")
-    for line in charanam:
-        st.write(line)
+
+if __name__ == "__main__":
+    main()
