@@ -1,13 +1,17 @@
 import streamlit as st
 import json
 import random
+import os
 
 
 # ==========================
-# LOAD JSON SAFELY
+# SAFE JSON LOADER
 # ==========================
 
 def load_json(file):
+    if not os.path.exists(file):
+        st.error(f"Missing file: {file}")
+        st.stop()
     with open(file, "r", encoding="utf-8") as f:
         return json.load(f)
 
@@ -19,78 +23,28 @@ CHUNKS_DB = load_json("sandham_chunks.json")
 
 
 # ==========================
-# EMOTION → SANDHAM BIAS
+# BASIC SANDHAM GENERATOR
 # ==========================
 
-EMOTION_WEIGHT_MAP = {
-    "joy": ["bright", "flow"],
-    "sad": ["soft", "stretch"],
-    "anger": ["sharp", "heavy"],
-    "romantic": ["soft", "flow"],
-    "devotional": ["stretch", "soft"],
-    "fear": ["tense", "sharp"],
-    "energetic": ["bright", "heavy"],
-    "melancholy": ["soft"],
-}
-
-
-# ==========================
-# SELECT RAGA
-# ==========================
-
-def get_raga_names():
-    names = []
-    for mela_no, mela in RAGA_DB["melakarta"].items():
-        names.append(mela["name"])
-    return sorted(names)
-
-
-def get_raga_by_name(name):
-    for mela in RAGA_DB["melakarta"].values():
-        if mela["name"] == name:
-            return mela
-    return None
-
-
-# ==========================
-# SANDHAM ENGINE
-# ==========================
-
-def generate_line(target_beats, emotion):
-    allowed_moods = EMOTION_WEIGHT_MAP.get(emotion, [])
-
+def generate_line(target_beats):
     result = []
     current = 0
 
     while current < target_beats:
-        beat_choices = list(CHUNKS_DB.keys())
-        beat = random.choice(beat_choices)
+        beat = random.choice(list(CHUNKS_DB.keys()))
+        beat = int(beat)
 
-        if current + int(beat) > target_beats:
+        if current + beat > target_beats:
             continue
 
-        possible_chunks = CHUNKS_DB[str(beat)] if isinstance(beat, str) else CHUNKS_DB[beat]
-
-        if allowed_moods:
-            filtered = [c for c in possible_chunks if c["mood"] in allowed_moods]
-            if filtered:
-                chunk = random.choice(filtered)
-            else:
-                chunk = random.choice(possible_chunks)
-        else:
-            chunk = random.choice(possible_chunks)
-
+        chunk = random.choice(CHUNKS_DB[str(beat)])
         result.append(chunk["text"])
-        current += int(beat)
+        current += beat
 
     return " ".join(result)
 
 
-# ==========================
-# COMPOSER ENGINE
-# ==========================
-
-def compose_song(raga, mood, emotion, entropy):
+def compose_song():
     structure = {
         "Pallavi": 2,
         "Anupallavi": 2,
@@ -103,8 +57,7 @@ def compose_song(raga, mood, emotion, entropy):
         section_lines = []
         for _ in range(lines):
             beats = random.choice([8, 12, 16])
-            line = generate_line(beats, emotion)
-            section_lines.append(line)
+            section_lines.append(generate_line(beats))
         song[section] = section_lines
 
     return song
@@ -114,24 +67,32 @@ def compose_song(raga, mood, emotion, entropy):
 # STREAMLIT UI
 # ==========================
 
-st.title("Carnatic Emotion-Based Sandham Composer")
+st.title("Carnatic Sandham Composer")
 
-raga_name = st.selectbox("Select Raga", get_raga_names())
-mood_category = st.selectbox("Select Mood Category", list(MOOD_DB["moods"].keys()))
-mood = st.selectbox("Select Specific Mood", MOOD_DB["moods"][mood_category])
-emotion = st.selectbox("Select Emotion", EMOTION_DB["emotions"])
+# Raga
+raga_names = [mela["name"] for mela in RAGA_DB["melakarta"].values()]
+raga_name = st.selectbox("Select Raga", sorted(raga_names))
 
-entropy = st.slider("Creativity (Entropy)", 0.0, 1.0, 0.5)
+# Mood Category (top level keys)
+mood_category = st.selectbox(
+    "Select Mood Category",
+    list(MOOD_DB["moods"].keys())
+)
+
+# Sub Mood (inside selected category)
+mood = st.selectbox(
+    "Select Specific Mood",
+    MOOD_DB["moods"][mood_category]
+)
+
+# Emotion (flat list)
+emotion = st.selectbox(
+    "Select Emotion",
+    EMOTION_DB["emotions"]
+)
 
 if st.button("Compose"):
-    raga = get_raga_by_name(raga_name)
-
-    song = compose_song(
-        raga=raga,
-        mood=mood,
-        emotion=emotion,
-        entropy=entropy
-    )
+    song = compose_song()
 
     st.subheader("Generated Structure")
 
