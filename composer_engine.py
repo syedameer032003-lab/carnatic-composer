@@ -1,153 +1,127 @@
+import streamlit as st
 import json
 import random
 import os
-from config import DEFAULT_SIGNATURE, DEFAULT_ENTROPY
-from memory_engine import update, penalty, boost
 
-BASE_PATH = os.path.dirname(__file__)
 
-def load_json(filename):
-    with open(os.path.join(BASE_PATH, filename), encoding="utf-8") as f:
+# ==========================
+# SAFE JSON LOADER
+# ==========================
+
+def load_json(file):
+    if not os.path.exists(file):
+        st.error(f"Missing file: {file}")
+        st.stop()
+
+    with open(file, "r", encoding="utf-8") as f:
         return json.load(f)
 
+
+# ==========================
+# LOAD DATABASES
+# ==========================
+
 RAGA_DB = load_json("raga_database.json")
-CHUNKS = load_json("chunks.json")
+MOOD_DB = load_json("moods.json")          # NO "moods" wrapper expected
+EMOTION_DB = load_json("emotions.json")   # Must contain {"emotions": [...]}
+CHUNKS_DB = load_json("sandham_chunks.json")
 
-TALA_DB = {
-    "Adi": 8,
-    "Rupaka": 6,
-    "MisraChap": 7
-}
 
-# -------------------------
-# Emotion Resolver
-# -------------------------
+# ==========================
+# RAGA HELPERS
+# ==========================
 
-FAMILY_KEYWORDS = {
-    "romantic": ["love", "affection", "heart"],
-    "tragic": ["sad", "loss", "grief"],
-    "heroic": ["victory", "battle", "rise"],
-    "tension": ["rage", "anger", "fear"],
-    "calm": ["peace", "serene"],
-    "celebration": ["joy", "festival"]
-}
+def get_raga_names():
+    return [
+        raga["name"]
+        for raga in RAGA_DB["melakarta"].values()
+    ]
 
-def resolve_emotion(emotion):
-    e = emotion.lower()
-    for family, words in FAMILY_KEYWORDS.items():
-        for w in words:
-            if w in e:
-                return family
-    return "romantic"
 
-# -------------------------
-# Raga Profile
-# -------------------------
+# ==========================
+# SANDHAM GENERATOR
+# ==========================
 
-def raga_profile(raga_id):
-    raga = RAGA_DB["melakarta"].get(str(raga_id))
-    if not raga:
-        return {"type": "neutral"}
+def generate_line(target_beats):
+    result = []
+    current = 0
 
-    aroha = raga["aroha"]
+    beat_options = list(CHUNKS_DB.keys())
 
-    if "N3" in aroha:
-        return {"type": "bright"}
-    if "R1" in aroha:
-        return {"type": "heavy"}
+    while current < target_beats:
+        beat = int(random.choice(beat_options))
 
-    return {"type": "soft"}
-
-# -------------------------
-# Structure
-# -------------------------
-
-def decide_structure():
-    return {"pallavi": 2, "charanam": 4}
-
-def dynamic_division(beats):
-    divisions = []
-    remaining = beats
-    while remaining > 0:
-        split = random.randint(2, min(4, remaining))
-        divisions.append(split)
-        remaining -= split
-    return divisions
-
-# -------------------------
-# Build Line
-# -------------------------
-
-def build_line(pattern, entropy):
-    line = []
-
-    for beat_group in pattern:
-        candidates = CHUNKS.get(str(beat_group), [])
-        if not candidates:
+        if current + beat > target_beats:
             continue
 
-        weighted = []
+        chunk_list = CHUNKS_DB[str(beat)]
 
-        for c in candidates:
-            base = penalty("chunk_usage", c["text"], entropy)
-            pref = boost("chunk_preference", c["text"])
-            weight = base * pref
-            weighted.append((c["text"], weight))
+        # Supports both formats:
+        # ["தனனா"]  OR  [{"text": "தனனா"}]
+        chunk = random.choice(chunk_list)
 
-        total = sum(w for _, w in weighted)
-        r = random.uniform(0, total)
-        upto = 0
+        if isinstance(chunk, dict):
+            result.append(chunk["text"])
+        else:
+            result.append(chunk)
 
-        chosen = weighted[0][0]
+        current += beat
 
-        for text, weight in weighted:
-            if upto + weight >= r:
-                chosen = text
-                break
-            upto += weight
+    return " ".join(result)
 
-        update("chunk_usage", chosen)
-        line.append(chosen)
 
-    return " ".join(line)
-
-# -------------------------
-# Main Composer
-# -------------------------
-
-def compose_song(
-    emotion,
-    raga_id,
-    tala_name,
-    signature=DEFAULT_SIGNATURE,
-    entropy=DEFAULT_ENTROPY
-):
-
-    family = resolve_emotion(emotion)
-    raga = raga_profile(raga_id)
-    beats = TALA_DB.get(tala_name, 8)
-
-    structure = decide_structure()
-
-    pallavi = []
-    charanam = []
-
-    for _ in range(structure["pallavi"]):
-        pattern = dynamic_division(beats)
-        line = build_line(pattern, entropy)
-        pallavi.append(line)
-
-    for _ in range(structure["charanam"]):
-        pattern = dynamic_division(beats)
-        line = build_line(pattern, entropy)
-        charanam.append(line)
-
-    return {
-        "emotion": emotion,
-        "family": family,
-        "raga_type": raga["type"],
-        "structure": {
-            "pallavi": pallavi,
-            "charanam": charanam
-        }
+def compose_song():
+    structure = {
+        "Pallavi": 2,
+        "Anupallavi": 2,
+        "Charanam": 4
     }
+
+    song = {}
+
+    for section, lines in structure.items():
+        section_lines = []
+        for _ in range(lines):
+            beats = random.choice([8, 12, 16])
+            section_lines.append(generate_line(beats))
+        song[section] = section_lines
+
+    return song
+
+
+# ==========================
+# STREAMLIT UI
+# ==========================
+
+st.title("Carnatic Emotion-Based Sandham Composer")
+
+# Raga
+raga_name = st.selectbox("Select Raga", sorted(get_raga_names()))
+
+# Mood (top-level keys directly)
+mood_category = st.selectbox("Select Mood Category", list(MOOD_DB.keys()))
+mood = st.selectbox("Select Specific Mood", MOOD_DB[mood_category])
+
+# Emotion
+emotion = st.selectbox("Select Emotion", EMOTION_DB["emotions"])
+
+# Creativity control
+entropy = st.slider("Creativity (Entropy)", 0.0, 1.0, 0.5)
+
+# ==========================
+# COMPOSE BUTTON
+# ==========================
+
+if st.button("Compose Song"):
+    song = compose_song()
+
+    st.subheader("Generated Structure")
+    st.write(f"Raga: {raga_name}")
+    st.write(f"Mood: {mood}")
+    st.write(f"Emotion: {emotion}")
+    st.write("")
+
+    for section, lines in song.items():
+        st.markdown(f"### {section}")
+        for line in lines:
+            st.write(line)
