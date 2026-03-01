@@ -1,3 +1,82 @@
+import json
+import streamlit as st
+
+def generate_raga_database():
+    MELAKARTA_NAMES = [
+    "Kanakangi","Ratnangi","Ganamurti","Vanaspati","Manavati","Tanarupi",
+    "Senavati","Hanumatodi","Dhenuka","Natakapriya","Kokilapriya","Rupavati",
+    "Gayakapriya","Vakulabharanam","Mayamalavagowla","Chakravakam","Suryakantam",
+    "Hatakambari","Jhankaradhwani","Natabhairavi","Keeravani","Kharaharapriya",
+    "Gourimanohari","Varunapriya","Mararanjani","Charukesi","Sarasangi",
+    "Harikambhoji","Dheerasankarabharanam","Naganandini","Yagapriya",
+    "Ragavardhini","Gangeyabhushani","Vagadheeswari","Shulini","Chalanata",
+    "Salagam","Jalarnavam","Jhalavarali","Navaneetam","Pavani","Raghupriya",
+    "Gavambodhi","Bhavapriya","Subhapantuvarali","Shadvidamargini","Suvarnangi",
+    "Divyamani","Dhavalambari","Namanarayani","Kamavardhini","Ramapriya",
+    "Gamanashrama","Vishwambari","Shamalangi","Shanmukhapriya",
+    "Simhendramadhyamam","Hemavati","Dharmavati","Neetimati","Kantamani",
+    "Rishabhapriya","Latangi","Vachaspati","Mechakalyani","Chitrambari",
+    "Sucharitra","Jyotiswarupini","Dhatuvardhini","Nasikabhushani","Kosalam",
+    "Rasikapriya"
+    ]
+
+    R_OPTIONS = ["R1","R1","R1","R1","R2","R2","R2","R2","R3","R3","R3","R3"]
+    G_OPTIONS = ["G1","G2","G3","G1","G2","G3","G1","G2","G3","G1","G2","G3"]
+    D_OPTIONS = ["D1","D1","D1","D1","D2","D2","D2","D2","D3","D3","D3","D3"]
+    N_OPTIONS = ["N1","N2","N3","N1","N2","N3","N1","N2","N3","N1","N2","N3"]
+
+    database = {"melakarta": {}}
+
+    count = 0
+    for m in ["M1","M2"]:
+        for i in range(36):
+            r = R_OPTIONS[i % 12]
+            g = G_OPTIONS[i % 12]
+            d = D_OPTIONS[i % 12]
+            n = N_OPTIONS[i % 12]
+
+            mela_number = count + 1
+            chakra = ((mela_number - 1) // 6) + 1
+            name = MELAKARTA_NAMES[count]
+
+            aroha = ["S", r, g, m, "P", d, n, "S'"]
+            avaroha = ["S'", n, d, "P", m, g, r, "S"]
+
+            base_scale = aroha[:-1]
+            audava = base_scale[:5]
+            shadava = base_scale[:6]
+            vakra = base_scale[:3] + base_scale[1:4] + base_scale[4:]
+
+            database["melakarta"][str(mela_number)] = {
+                "name": name,
+                "chakra": chakra,
+                "aroha": aroha,
+                "avaroha": avaroha,
+                "janya": {
+                    "Audava": {"aroha": audava, "avaroha": audava[::-1]},
+                    "Shadava": {"aroha": shadava, "avaroha": shadava[::-1]},
+                    "Vakra": {"aroha": vakra, "avaroha": vakra[::-1]}
+                }
+            }
+
+            count += 1
+
+    return database
+
+
+st.title("Generate Raga Database")
+
+if st.button("Generate JSON File"):
+    db = generate_raga_database()
+    json_data = json.dumps(db, indent=2, ensure_ascii=False)
+    st.download_button(
+        label="Download raga_database.json",
+        data=json_data,
+        file_name="raga_database.json",
+        mime="application/json"
+    )
+
+
 import streamlit as st
 import random
 
