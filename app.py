@@ -12,33 +12,57 @@ def load_json(file):
     if not os.path.exists(file):
         st.error(f"Missing file: {file}")
         st.stop()
+
     with open(file, "r", encoding="utf-8") as f:
         return json.load(f)
 
 
+# ==========================
+# LOAD DATABASES
+# ==========================
+
 RAGA_DB = load_json("raga_database.json")
-MOOD_DB = load_json("moods.json")
 EMOTION_DB = load_json("emotions.json")
 CHUNKS_DB = load_json("sandham_chunks.json")
 
 
 # ==========================
-# BASIC SANDHAM GENERATOR
+# RAGA HELPERS
+# ==========================
+
+def get_raga_names():
+    return [
+        raga["name"]
+        for raga in RAGA_DB["melakarta"].values()
+    ]
+
+
+# ==========================
+# SANDHAM GENERATOR
 # ==========================
 
 def generate_line(target_beats):
     result = []
     current = 0
 
+    beat_options = list(CHUNKS_DB.keys())
+
     while current < target_beats:
-        beat = random.choice(list(CHUNKS_DB.keys()))
-        beat = int(beat)
+        beat = int(random.choice(beat_options))
 
         if current + beat > target_beats:
             continue
 
-        chunk = random.choice(CHUNKS_DB[str(beat)])
-        result.append(chunk["text"])
+        chunk_list = CHUNKS_DB[str(beat)]
+        chunk = random.choice(chunk_list)
+
+        # Supports both formats:
+        # ["தனனா"]  OR  [{"text": "தனனா"}]
+        if isinstance(chunk, dict):
+            result.append(chunk["text"])
+        else:
+            result.append(chunk)
+
         current += beat
 
     return " ".join(result)
@@ -67,34 +91,28 @@ def compose_song():
 # STREAMLIT UI
 # ==========================
 
-st.title("Carnatic Sandham Composer")
+st.title("Carnatic Emotion-Based Sandham Composer")
 
-# Raga
-raga_names = [mela["name"] for mela in RAGA_DB["melakarta"].values()]
-raga_name = st.selectbox("Select Raga", sorted(raga_names))
+# Raga selection
+raga_name = st.selectbox("Select Raga", sorted(get_raga_names()))
 
-# Mood Category (top level keys)
-mood_category = st.selectbox(
-    "Select Mood Category",
-    list(MOOD_DB["moods"].keys())
-)
+# Emotion selection
+emotion = st.selectbox("Select Emotion", EMOTION_DB["emotions"])
 
-# Sub Mood (inside selected category)
-mood = st.selectbox(
-    "Select Specific Mood",
-    MOOD_DB["moods"][mood_category]
-)
+# Creativity control
+entropy = st.slider("Creativity (Entropy)", 0.0, 1.0, 0.5)
 
-# Emotion (flat list)
-emotion = st.selectbox(
-    "Select Emotion",
-    EMOTION_DB["emotions"]
-)
+# ==========================
+# COMPOSE BUTTON
+# ==========================
 
-if st.button("Compose"):
+if st.button("Compose Song"):
     song = compose_song()
 
     st.subheader("Generated Structure")
+    st.write(f"Raga: {raga_name}")
+    st.write(f"Emotion: {emotion}")
+    st.write("")
 
     for section, lines in song.items():
         st.markdown(f"### {section}")
