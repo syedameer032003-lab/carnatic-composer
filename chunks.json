@@ -1,0 +1,43 @@
+{
+  "2": [
+    { "text": "தன", "mood": "soft", "weight": 1, "closure": "open" },
+    { "text": "தத்", "mood": "sharp", "weight": 2, "closure": "closed" },
+    { "text": "தா", "mood": "soft", "weight": 1, "closure": "stretch" },
+    { "text": "தந்த", "mood": "heavy", "weight": 2, "closure": "closed" }
+  ],
+
+  "3": [
+    { "text": "தனன", "mood": "flow", "weight": 1, "closure": "open" },
+    { "text": "தத்த", "mood": "heavy", "weight": 3, "closure": "closed" },
+    { "text": "தய்ய", "mood": "bright", "weight": 2, "closure": "open" },
+    { "text": "தந்தன", "mood": "heavy", "weight": 3, "closure": "closed" },
+    { "text": "தன்னத", "mood": "tense", "weight": 2, "closure": "closed" }
+  ],
+
+  "4": [
+    { "text": "தனதன", "mood": "flow", "weight": 1, "closure": "open" },
+    { "text": "தத்தன", "mood": "heavy", "weight": 3, "closure": "closed" },
+    { "text": "தானா", "mood": "soft", "weight": 2, "closure": "stretch" },
+    { "text": "தனனா", "mood": "flow", "weight": 1, "closure": "open" },
+    { "text": "தந்தனன", "mood": "heavy", "weight": 3, "closure": "closed" },
+    { "text": "தய்யா", "mood": "bright", "weight": 2, "closure": "stretch" }
+  ],
+
+  "5": [
+    { "text": "தனதத்த", "mood": "tense", "weight": 3, "closure": "closed" },
+    { "text": "தத்ததன", "mood": "heavy", "weight": 3, "closure": "closed" },
+    { "text": "தனந்தன", "mood": "flow", "weight": 2, "closure": "open" },
+    { "text": "தானதன", "mood": "flow", "weight": 2, "closure": "open" },
+    { "text": "தனந்த", "mood": "tense", "weight": 3, "closure": "closed" },
+    { "text": "தத்ததத", "mood": "sharp", "weight": 4, "closure": "closed" }
+  ],
+
+  "6": [
+    { "text": "தனதனன", "mood": "flow", "weight": 1, "closure": "open" },
+    { "text": "தத்ததத்த", "mood": "heavy", "weight": 4, "closure": "closed" },
+    { "text": "தனானா", "mood": "soft", "weight": 2, "closure": "stretch" },
+    { "text": "தானனா", "mood": "flow", "weight": 2, "closure": "open" },
+    { "text": "தனந்தானா", "mood": "heavy", "weight": 4, "closure": "stretch" },
+    { "text": "தனானனா", "mood": "flow", "weight": 2, "closure": "open" }
+  ]
+}
