@@ -1,95 +1,140 @@
 import streamlit as st
 import json
-import os
-import traceback
-from composer_engine import compose_song
-from voice_mapper import extract_rhythm_blueprint
+import random
 
-st.set_page_config(page_title="Carnatic Sandham Studio")
-st.title("Carnatic Sandham Studio")
 
-BASE_PATH = os.path.dirname(__file__)
+# ==========================
+# LOAD JSON SAFELY
+# ==========================
 
-# ----------------------------
-# LOAD JSON FILES
-# ----------------------------
-
-def load_json(filename):
-    with open(os.path.join(BASE_PATH, filename), encoding="utf-8") as f:
+def load_json(file):
+    with open(file, "r", encoding="utf-8") as f:
         return json.load(f)
 
+
 RAGA_DB = load_json("raga_database.json")
+MOOD_DB = load_json("moods.json")
 EMOTION_DB = load_json("emotions.json")
+CHUNKS_DB = load_json("sandham_chunks.json")
 
-# ----------------------------
-# PREPARE DROPDOWNS
-# ----------------------------
 
-# Emotions (your structure)
-emotion_list = sorted(EMOTION_DB["emotions"])
+# ==========================
+# EMOTION → SANDHAM BIAS
+# ==========================
 
-# Melakarta dropdown
-melakarta_list = []
-for key, value in RAGA_DB["melakarta"].items():
-    melakarta_list.append(f"{key} - {value['name']}")
+EMOTION_WEIGHT_MAP = {
+    "joy": ["bright", "flow"],
+    "sad": ["soft", "stretch"],
+    "anger": ["sharp", "heavy"],
+    "romantic": ["soft", "flow"],
+    "devotional": ["stretch", "soft"],
+    "fear": ["tense", "sharp"],
+    "energetic": ["bright", "heavy"],
+    "melancholy": ["soft"],
+}
 
-melakarta_list = sorted(melakarta_list, key=lambda x: int(x.split(" - ")[0]))
 
-# ----------------------------
-# INPUT SECTION
-# ----------------------------
+# ==========================
+# SELECT RAGA
+# ==========================
 
-emotion = st.selectbox("Emotion", emotion_list)
+def get_raga_names():
+    names = []
+    for mela_no, mela in RAGA_DB["melakarta"].items():
+        names.append(mela["name"])
+    return sorted(names)
 
-raga_selection = st.selectbox("Raga (Melakarta)", melakarta_list)
-raga_id = raga_selection.split(" - ")[0]
 
-tala = st.selectbox("Tala", ["Adi", "Rupaka", "MisraChap"])
+def get_raga_by_name(name):
+    for mela in RAGA_DB["melakarta"].values():
+        if mela["name"] == name:
+            return mela
+    return None
 
-entropy = st.slider("Entropy", 0.0, 1.0, 0.3)
 
-# ----------------------------
-# COMPOSE
-# ----------------------------
+# ==========================
+# SANDHAM ENGINE
+# ==========================
+
+def generate_line(target_beats, emotion):
+    allowed_moods = EMOTION_WEIGHT_MAP.get(emotion, [])
+
+    result = []
+    current = 0
+
+    while current < target_beats:
+        beat_choices = list(CHUNKS_DB.keys())
+        beat = random.choice(beat_choices)
+
+        if current + int(beat) > target_beats:
+            continue
+
+        possible_chunks = CHUNKS_DB[str(beat)] if isinstance(beat, str) else CHUNKS_DB[beat]
+
+        if allowed_moods:
+            filtered = [c for c in possible_chunks if c["mood"] in allowed_moods]
+            if filtered:
+                chunk = random.choice(filtered)
+            else:
+                chunk = random.choice(possible_chunks)
+        else:
+            chunk = random.choice(possible_chunks)
+
+        result.append(chunk["text"])
+        current += int(beat)
+
+    return " ".join(result)
+
+
+# ==========================
+# COMPOSER ENGINE
+# ==========================
+
+def compose_song(raga, mood, emotion, entropy):
+    structure = {
+        "Pallavi": 2,
+        "Anupallavi": 2,
+        "Charanam": 4
+    }
+
+    song = {}
+
+    for section, lines in structure.items():
+        section_lines = []
+        for _ in range(lines):
+            beats = random.choice([8, 12, 16])
+            line = generate_line(beats, emotion)
+            section_lines.append(line)
+        song[section] = section_lines
+
+    return song
+
+
+# ==========================
+# STREAMLIT UI
+# ==========================
+
+st.title("Carnatic Emotion-Based Sandham Composer")
+
+raga_name = st.selectbox("Select Raga", get_raga_names())
+mood = st.selectbox("Select Mood", MOOD_DB["moods"])
+emotion = st.selectbox("Select Emotion", EMOTION_DB["emotions"])
+
+entropy = st.slider("Creativity (Entropy)", 0.0, 1.0, 0.5)
 
 if st.button("Compose"):
+    raga = get_raga_by_name(raga_name)
 
-    try:
-        song = compose_song(
-            emotion=emotion,
-            raga_id=raga_id,
-            tala_name=tala,
-            entropy=entropy
-        )
+    song = compose_song(
+        raga=raga,
+        mood=mood,
+        emotion=emotion,
+        entropy=entropy
+    )
 
-        st.subheader("Pallavi")
-        for line in song["structure"]["pallavi"]:
+    st.subheader("Generated Structure")
+
+    for section, lines in song.items():
+        st.markdown(f"### {section}")
+        for line in lines:
             st.write(line)
-
-        st.subheader("Charanam")
-        for line in song["structure"]["charanam"]:
-            st.write(line)
-
-    except Exception as e:
-        st.error("Error while composing")
-        st.text(str(e))
-        st.text(traceback.format_exc())
-
-# ----------------------------
-# VOICE SECTION
-# ----------------------------
-
-st.divider()
-st.header("Voice → Sandham")
-
-audio = st.file_uploader("Upload humming (wav recommended)", type=["wav"])
-
-if audio is not None:
-    try:
-        blueprint = extract_rhythm_blueprint(audio)
-        st.subheader("Detected Sandham Blueprint")
-        st.write(blueprint)
-    except Exception as e:
-        st.error("Audio processing error")
-        st.text(str(e))
-        st.text(traceback.format_exc())
