@@ -1,88 +1,32 @@
 
 import streamlit as st
-import json
 from composer_engine import compose_song
+from voice_mapper import extract_rhythm_blueprint
 
-# ======================================
-# PAGE CONFIG
-# ======================================
+st.title("Carnatic Sandham Studio")
 
-st.set_page_config(page_title="Carnatic Composition Engine", layout="wide")
+emotion = st.text_input("Emotion", "love")
+raga_id = st.text_input("Raga ID", "15")
+tala = st.selectbox("Tala", ["Adi", "Rupaka", "MisraChap"])
+entropy = st.slider("Entropy", 0.0, 1.0, 0.3)
 
-st.title("🎼 Carnatic Commercial Composition Engine")
+if st.button("Compose"):
+    song = compose_song(emotion, raga_id, tala, entropy=entropy)
 
-# ======================================
-# LOAD RAGA DATABASE
-# ======================================
-
-@st.cache_data
-def load_ragas():
-    with open("raga_database.json", "r", encoding="utf-8") as f:
-        raw = json.load(f)
-
-    ragas = []
-    for _, data in raw["melakarta"].items():
-        ragas.append(data["name"])
-
-    return sorted(ragas)
-
-RAGA_NAMES = load_ragas()
-
-# ======================================
-# UI CONTROLS
-# ======================================
-
-col1, col2 = st.columns(2)
-
-with col1:
-    raga_name = st.selectbox("Select Raga", RAGA_NAMES)
-
-    tala_name = st.selectbox(
-        "Select Tala",
-        ["Adi", "Rupaka", "Misra_Chapu", "Khanda_Chapu"]
-    )
-
-    motion = st.selectbox(
-        "Select Emotional Motion",
-        ["gradual_rise", "fall_then_rise", "explosive",
-         "wave", "fall", "static"]
-    )
-
-with col2:
-    intensity = st.slider("Intensity", 1, 10, 6)
-
-    line_bias = st.selectbox(
-        "Line Bias",
-        ["adaptive", "even", "odd"]
-    )
-
-    spill_probability = st.slider(
-        "Spill Probability",
-        0.0, 0.5, 0.1
-    )
-
-# ======================================
-# GENERATE BUTTON
-# ======================================
-
-if st.button("Generate Composition"):
-
-    song = compose_song(
-        polarity="positive",
-        motion=motion,
-        intensity=intensity,
-        raga_name=raga_name,
-        tala_name=tala_name,
-        line_bias=line_bias,
-        spill_probability=spill_probability
-    )
-
-    st.subheader("🎵 Pallavi")
-
-    for line in song["pallavi"]:
+    st.subheader("Pallavi")
+    for line in song["structure"]["pallavi"]:
         st.write(line)
 
-    st.subheader("🎵 Charanam")
-
-    for line in song["charanam"]:
+    st.subheader("Charanam")
+    for line in song["structure"]["charanam"]:
         st.write(line)
+
+st.divider()
+
+st.header("Voice → Sandham")
+
+audio = st.file_uploader("Upload humming", type=["wav", "mp3"])
+
+if audio:
+    blueprint = extract_rhythm_blueprint(audio)
+    st.write(blueprint)
