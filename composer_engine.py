@@ -1,301 +1,153 @@
-import random
 import json
+import random
+import os
+from config import DEFAULT_SIGNATURE, DEFAULT_ENTROPY
+from memory_engine import update, penalty, boost
 
-# ======================================
-# LOAD RAGA DATABASE (YOUR STRUCTURE)
-# ======================================
+BASE_PATH = os.path.dirname(__file__)
 
-with open("raga_database.json", "r", encoding="utf-8") as f:
-    RAW_RAGA_DATA = json.load(f)
+def load_json(filename):
+    with open(os.path.join(BASE_PATH, filename), encoding="utf-8") as f:
+        return json.load(f)
 
-# Flatten melakarta structure
-RAGA_DB = {}
-
-for mela_no, data in RAW_RAGA_DATA["melakarta"].items():
-    name = data["name"]
-    RAGA_DB[name] = {
-        "aroha": data["aroha"],
-        "avaroha": data["avaroha"],
-        "chakra": data["chakra"],
-        "mela_number": mela_no
-    }
-
-# ======================================
-# TALA DATABASE
-# ======================================
+RAGA_DB = load_json("raga_database.json")
+CHUNKS = load_json("chunks.json")
 
 TALA_DB = {
     "Adi": 8,
     "Rupaka": 6,
-    "Misra_Chapu": 7,
-    "Khanda_Chapu": 5
+    "MisraChap": 7
 }
 
-# ======================================
-# ATOMIC SANDHAM CLUSTERS
-# ======================================
+# -------------------------
+# Emotion Resolver
+# -------------------------
 
-CLUSTERS = {
-    2: ["தன", "தத்", "தா"],
-    3: ["தனன", "தத்த", "தய்ய"],
-    4: ["தனதன", "தத்தன", "தானா"],
-    5: ["தனதத்த", "தத்ததன"],
-    6: ["தனதனன", "தத்ததத்த"]
+FAMILY_KEYWORDS = {
+    "romantic": ["love", "affection", "heart"],
+    "tragic": ["sad", "loss", "grief"],
+    "heroic": ["victory", "battle", "rise"],
+    "tension": ["rage", "anger", "fear"],
+    "calm": ["peace", "serene"],
+    "celebration": ["joy", "festival"]
 }
 
-# ======================================
-# RAGA EMOTION PROFILE
-# ======================================
+def resolve_emotion(emotion):
+    e = emotion.lower()
+    for family, words in FAMILY_KEYWORDS.items():
+        for w in words:
+            if w in e:
+                return family
+    return "romantic"
 
-def raga_emotion_profile(raga_data):
+# -------------------------
+# Raga Profile
+# -------------------------
 
-    scale = raga_data["aroha"]
+def raga_profile(raga_id):
+    raga = RAGA_DB["melakarta"].get(str(raga_id))
+    if not raga:
+        return {"type": "neutral"}
 
-    brightness = 0
-    tension = 0
+    aroha = raga["aroha"]
 
-    for swara in scale:
-        if "M2" in swara or "N3" in swara:
-            brightness += 1
-        if "R1" in swara or "D1" in swara:
-            tension += 1
+    if "N3" in aroha:
+        return {"type": "bright"}
+    if "R1" in aroha:
+        return {"type": "heavy"}
 
-    if brightness > tension:
-        tonal_bias = "bright"
-    elif tension > brightness:
-        tonal_bias = "heavy"
-    else:
-        tonal_bias = "balanced"
+    return {"type": "soft"}
 
-    return {
-        "brightness": brightness,
-        "tension": tension,
-        "tonal_bias": tonal_bias
-    }
+# -------------------------
+# Structure
+# -------------------------
 
-# ======================================
-# STRUCTURE DECISION
-# ======================================
+def decide_structure():
+    return {"pallavi": 2, "charanam": 4}
 
-def decide_structure(polarity, motion, intensity, line_bias):
-
-    if motion == "explosive":
-        pallavi = 2
-        charanam = 4
-
-    elif motion == "fall_then_rise":
-        pallavi = 4
-        charanam = 8
-
-    elif motion == "wave":
-        pallavi = 4
-        charanam = 6
-
-    elif motion == "fall":
-        pallavi = 3
-        charanam = 4
-
-    else:
-        pallavi = 3
-        charanam = 6
-
-    if line_bias == "even":
-        if pallavi % 2 != 0:
-            pallavi += 1
-        if charanam % 2 != 0:
-            charanam += 1
-
-    elif line_bias == "odd":
-        if pallavi % 2 == 0:
-            pallavi += 1
-        if charanam % 2 == 0:
-            charanam += 1
-
-    elif line_bias == "adaptive":
-        if motion in ["gradual_rise", "wave"] and intensity > 6:
-            if pallavi % 2 == 0:
-                pallavi += 1
-
-    return {"pallavi": pallavi, "charanam": charanam}
-
-# ======================================
-# EMOTIONAL CURVE
-# ======================================
-
-def emotional_curve(motion, raga_profile):
-
-    if motion == "gradual_rise":
-        curve = ["base", "lift", "peak"]
-
-    elif motion == "explosive":
-        curve = ["peak", "stabilize"]
-
-    elif motion == "fall_then_rise":
-        curve = ["heavy", "relax", "lift", "peak"]
-
-    elif motion == "wave":
-        curve = ["base", "lift", "relax", "lift", "peak"]
-
-    elif motion == "fall":
-        curve = ["heavy", "drop"]
-
-    else:
-        curve = ["base", "lift", "peak"]
-
-    if raga_profile["tonal_bias"] == "bright":
-        curve.append("peak")
-
-    if raga_profile["tonal_bias"] == "heavy":
-        curve.insert(0, "heavy")
-
-    return curve
-
-# ======================================
-# DYNAMIC BEAT DIVISION
-# ======================================
-
-def dynamic_division(total_beats, segments):
-
+def dynamic_division(beats):
     divisions = []
-    remaining = total_beats
-
-    for i in range(segments - 1):
-        min_required = 2 * (segments - i - 1)
-        val = random.randint(2, remaining - min_required)
-        divisions.append(val)
-        remaining -= val
-
-    divisions.append(remaining)
+    remaining = beats
+    while remaining > 0:
+        split = random.randint(2, min(4, remaining))
+        divisions.append(split)
+        remaining -= split
     return divisions
 
-# ======================================
-# RAGA DENSITY MODIFIER
-# ======================================
+# -------------------------
+# Build Line
+# -------------------------
 
-def raga_density_modifier(pattern, raga_profile):
-
-    if raga_profile["tonal_bias"] == "bright":
-        pattern[-1] += 1
-
-    if raga_profile["tonal_bias"] == "heavy":
-        pattern[0] += 1
-
-    return pattern
-
-# ======================================
-# OPTIONAL SPILL
-# ======================================
-
-def apply_spill(pattern, probability):
-
-    if random.random() < probability:
-        pattern[-1] += 1
-
-    return pattern
-
-# ======================================
-# BUILD SANDHAM
-# ======================================
-
-def build_sandham(pattern):
-
+def build_line(pattern, entropy):
     line = []
 
-    for weight in pattern:
-        options = CLUSTERS.get(weight)
+    for beat_group in pattern:
+        candidates = CHUNKS.get(str(beat_group), [])
+        if not candidates:
+            continue
 
-        if not options:
-            closest = min(CLUSTERS.keys(), key=lambda x: abs(x - weight))
-            options = CLUSTERS[closest]
+        weighted = []
 
-        line.append(random.choice(options))
+        for c in candidates:
+            base = penalty("chunk_usage", c["text"], entropy)
+            pref = boost("chunk_preference", c["text"])
+            weight = base * pref
+            weighted.append((c["text"], weight))
+
+        total = sum(w for _, w in weighted)
+        r = random.uniform(0, total)
+        upto = 0
+
+        chosen = weighted[0][0]
+
+        for text, weight in weighted:
+            if upto + weight >= r:
+                chosen = text
+                break
+            upto += weight
+
+        update("chunk_usage", chosen)
+        line.append(chosen)
 
     return " ".join(line)
 
-# ======================================
-# SECTION GENERATOR
-# ======================================
+# -------------------------
+# Main Composer
+# -------------------------
 
-def generate_section(line_count,
-                     total_beats,
-                     motion,
-                     intensity,
-                     raga_profile,
-                     spill_probability):
+def compose_song(
+    emotion,
+    raga_id,
+    tala_name,
+    signature=DEFAULT_SIGNATURE,
+    entropy=DEFAULT_ENTROPY
+):
 
-    curve = emotional_curve(motion, raga_profile)
-    section = []
+    family = resolve_emotion(emotion)
+    raga = raga_profile(raga_id)
+    beats = TALA_DB.get(tala_name, 8)
 
-    for i in range(line_count):
+    structure = decide_structure()
 
-        stage = curve[min(i, len(curve) - 1)]
+    pallavi = []
+    charanam = []
 
-        segments = 3 if stage in ["base", "lift"] else 2
-        pattern = dynamic_division(total_beats, segments)
+    for _ in range(structure["pallavi"]):
+        pattern = dynamic_division(beats)
+        line = build_line(pattern, entropy)
+        pallavi.append(line)
 
-        if stage == "lift":
-            pattern[-1] += 1
-
-        elif stage == "peak":
-            pattern[-1] += min(2, intensity // 3)
-
-        elif stage == "heavy":
-            pattern[0] += 1
-
-        elif stage == "relax":
-            if pattern[-1] > 2:
-                pattern[-1] -= 1
-
-        pattern = raga_density_modifier(pattern, raga_profile)
-        pattern = apply_spill(pattern, spill_probability)
-
-        section.append(build_sandham(pattern))
-
-    return section
-
-# ======================================
-# MASTER COMPOSE FUNCTION
-# ======================================
-
-def compose_song(polarity,
-                 motion,
-                 intensity,
-                 raga_name,
-                 tala_name,
-                 line_bias="adaptive",
-                 spill_probability=0.1):
-
-    raga_data = RAGA_DB[raga_name]
-    tala_beats = TALA_DB[tala_name]
-
-    raga_profile = raga_emotion_profile(raga_data)
-
-    structure = decide_structure(
-        polarity,
-        motion,
-        intensity,
-        line_bias
-    )
-
-    pallavi = generate_section(
-        structure["pallavi"],
-        tala_beats,
-        motion,
-        intensity,
-        raga_profile,
-        spill_probability
-    )
-
-    charanam = generate_section(
-        structure["charanam"],
-        tala_beats,
-        motion,
-        intensity,
-        raga_profile,
-        spill_probability
-    )
+    for _ in range(structure["charanam"]):
+        pattern = dynamic_division(beats)
+        line = build_line(pattern, entropy)
+        charanam.append(line)
 
     return {
-        "pallavi": pallavi,
-        "charanam": charanam
+        "emotion": emotion,
+        "family": family,
+        "raga_type": raga["type"],
+        "structure": {
+            "pallavi": pallavi,
+            "charanam": charanam
+        }
     }
